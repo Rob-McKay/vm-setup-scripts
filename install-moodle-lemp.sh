@@ -80,45 +80,43 @@ fi
 # Configure nginx moodle website
 tee /etc/nginx/conf.d/default.conf << 'EOF2' > /dev/null
 server {
-#	listen       443 ssl http2;
-#	listen       [::]:443 ssl http2;
-	listen       80;
-	listen       [::]:80;
-	server_name  vm1.development.4mation.co.uk.local;
+#       listen       443 ssl http2;
+#       listen       [::]:443 ssl http2;
+        listen       80 default_server;
+        listen       [::]:80 default_server;
+#       server_name  vm1.development.4mation.co.uk.local;
     
-	root /var/www/html/moodle;
+        root /var/www/html/moodle;
 
-	index index.php index.html;
+        index index.php index.html;
 
-	location / {
-		try_files $uri $uri/ /index.php?$query_string;
-	}
+        location ~ [^/]\.php(/|$) {
+                fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+                if (!-f $document_root$fastcgi_script_name) {
+                        return 404;
+                }
 
-	# Pass PHP Scripts To FastCGI Server
-	location ~ \.php$ {
-		fastcgi_split_path_info ^(.+\.php)(/.+)$;
-		fastcgi_pass unix:/run/php/php8.1-fpm.sock; #depends on PHP versions
-		fastcgi_index index.php;
-		fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-		include fastcgi_params;
-	}
+                # Mitigate https://httpoxy.org/ vulnerabilities
+                fastcgi_param HTTP_PROXY "";
 
-	location ~ /\.(?!well-known).* {
-		deny all;
-	}
-	
-	location /dataroot/ {
-		internal;
-		alias /var/moodle/moodledata/; # ensure the path ends with /
-	}
+                fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+                fastcgi_index index.php;
+
+                # include the fastcgi_param setting
+                include fastcgi_params;
+
+                fastcgi_param   PATH_INFO       $fastcgi_path_info;
+                fastcgi_param  SCRIPT_FILENAME   $document_root$fastcgi_script_name;
+        }
+
 }
 
 # enforce HTTPS
 #server {
-#	listen       80;
-#	listen       [::]:80;
-#	server_name  vm1.development.4mation.co.uk.local;
-#	return 301   https://$host$request_uri;
+#       listen       80;
+#       listen       [::]:80;
+#       server_name  vm1.development.4mation.co.uk.local;
+#       return 301   https://$host$request_uri;
 #}
 
 EOF2
