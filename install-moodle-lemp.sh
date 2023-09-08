@@ -37,13 +37,13 @@ update_packages() {
 	echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/debian `lsb_release -cs` nginx" | tee /etc/apt/sources.list.d/nginx.list
 
 	# Ensure everything is up to date
-	apt update && apt upgrade
+	apt update && apt upgrade -y
 }
 
 
 install_required_prereqs() {
 	# Add a few needed packages
-	apt install wget curl joe ufw software-properties-common dirmngr apt-transport-https gnupg2 ca-certificates lsb-release debian-archive-keyring unzip git -y
+	apt install -y wget curl joe ufw software-properties-common dirmngr apt-transport-https gnupg2 ca-certificates lsb-release debian-archive-keyring unzip git
 
 	# Configure Firewall
 	ufw allow http
@@ -211,12 +211,13 @@ SQL
 		--fullname=$SITE_FULLNAME --shortname=$SITE_SHORTNAME \
 		--agree-license --non-interactive
 
+	# Install the adaptable moodle theme
 	cd /var/www/html/moodle/theme
 	curl https://moodle.org/plugins/download.php/29152/theme_adaptable_moodle41_2022112306.zip -o ~/theme_adaptable_moodle.zip
 	unzip ~/theme_adaptable_moodle.zip
 
 	cd /var/www/html/moodle/admin/cli
-	runuser -u nginx -- /usr/bin/php build_theme_css.php --themes=boost
+	runuser -u nginx -- /usr/bin/php build_theme_css.php --themes=adaptable
 
 	# Site defaults may be changed via local/defaults.php
 	runuser -u nginx -- /usr/bin/php upgrade.php --non-interactive
