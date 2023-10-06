@@ -3,7 +3,15 @@ set -eu
 
 randpw(){ < /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c${1:-16};echo;}
 
+ADMIN_USER=admin
+ADMIN_PASSWORD=Pa55word
+ADMIN_EMAIL=$ADMIN_USER@$(hostname -f)
+
+
 MOODLE_VERSION=MOODLE_401_STABLE
+#MOODLE_REPO=git://git.moodle.org/moodle.git
+MOODLE_REPO=https://github.com/SuperLearningSeries/moodle.git
+
 PHP_VERSION=8.1
 
 DB_HOST=localhost
@@ -13,6 +21,7 @@ DB_PASSWORD=$(randpw)
 
 SITE_FULLNAME='SuperLearningSeries'
 SITE_SHORTNAME='SuperLearningSeries' 
+SITE_SUMMARY='WELCOME TO SUPER LEARNING'
 
 WEB_ROOT=http://$(hostname -f)
 
@@ -105,6 +114,14 @@ server {
                 fastcgi_param   PATH_INFO       $fastcgi_path_info;
                 fastcgi_param  SCRIPT_FILENAME   $document_root$fastcgi_script_name;
         }
+        
+        location /images/ {
+        	root /var/www/html;
+        	sendfile on;
+        	sendfile_max_chunk 1m;
+        	tcp_nodelay       on;
+		keepalive_timeout 65;
+        }
 
 }
 
@@ -143,7 +160,8 @@ EOF2
 
 
 
-install_moodle() {
+download_moodle()
+{
 	# Install moodle files from the moodle git repo
 	cd /var/www/html
 
@@ -151,12 +169,32 @@ install_moodle() {
 		rm -rf moodle
 	fi
 
-	git clone -b $MOODLE_VERSION git://git.moodle.org/moodle.git
+	git clone $MOODLE_REPO --branch $MOODLE_VERSION --single-branch
 	# Add repo as a safe directory because it is owned by root!
 	git config --global --add safe.directory /var/www/html/moodle
 
 	chown -R root:nginx /var/www/html/moodle
 	chmod -R 0755 /var/www/html/moodle
+}
+
+
+update_moodle()
+{
+	# Install moodle files from the moodle git repo
+	cd /var/www/html/moodle
+
+	git checkout $MOODLE_VERSION
+	git pull
+
+	chown -R root:nginx /var/www/html/moodle
+	chmod -R 0755 /var/www/html/moodle
+}
+
+
+
+install_moodle() {
+	# Install moodle files from the moodle git repo
+	cd /var/www/html
 
 	# Create the moodle data directory
 	mkdir -p /var/moodle/moodledata
@@ -207,8 +245,8 @@ SQL
 
 	runuser -u nginx -- /usr/bin/php install.php --lang=en --wwwroot=$WEB_ROOT --dataroot=/var/moodle/moodledata \
 		--dbtype=mariadb --dbhost=$DB_HOST --dbuser=$DB_USER --dbpass=$DB_PASSWORD \
-		--adminuser=admin --adminpass=Pa55word \
-		--fullname=$SITE_FULLNAME --shortname=$SITE_SHORTNAME \
+		--adminuser=$ADMIN_USER --adminpass=$ADMIN_PASSWORD --adminemail=$ADMIN_EMAIL \
+		--fullname="$SITE_FULLNAME" --shortname="$SITE_SHORTNAME" --summary="$SITE_SUMMARY" \
 		--agree-license --non-interactive
 
 	# Install the adaptable moodle theme
@@ -217,6 +255,63 @@ SQL
 	unzip ~/theme_adaptable_moodle.zip
 
 	cd /var/www/html/moodle/admin/cli
+	php cfg.php --name=theme --set=adaptable
+	php cfg.php --name=sitedefaultlicense --set='allrightsreserved'
+	php cfg.php --name=additionalhtmltopofbody --set='<audio id="PnA_player"></audio>'
+	php cfg.php --name=hiddenuserfields --set='description,email,city,country,moodlenetprofile,timezone,firstaccess,lastaccess,lastip,mycourses,groups,suspended'
+	php cfg.php --name=showuseridentity --set=''
+	php cfg.php --name=defaultrequestcategory --set=2
+	php cfg.php --name=locale --set='en_GB.UTF-8'
+	php cfg.php --name=defaulthomepage --set=0
+	php cfg.php --name=navshowfullcoursenames --set=1
+	php cfg.php --name=navadduserpostslinks --set=0
+	php cfg.php --name=allowguestmymoodle --set=0
+	php cfg.php --name=frontpage --set='6,0'
+	php cfg.php --name=frontpageloggedin --set='5,6'
+	php cfg.php --name=coursecontact --set=''
+	php cfg.php --name=enableblogs --set=0
+	php cfg.php --name=docroot --set=''
+		
+	php cfg.php --component=quiz --name=browsersecurity --set='securewindow'
+	php cfg.php --component=quiz --name=decimalpoints --set='0'
+	php cfg.php --component=quiz --name=shuffleanswers --set='0'
+	
+	php cfg.php --component=theme_adaptable --name=maincolor --set='#03BE07'
+	php cfg.php --component=theme_adaptable --name=backcolor --set='#FFFEEDB'
+	php cfg.php --component=theme_adaptable --name=regionmaincolor --set='#FFEEDB'
+	php cfg.php --component=theme_adaptable --name=linkhover --set='#05005A'
+	php cfg.php --component=theme_adaptable --name=selectionbackground --set='#05005A'
+	php cfg.php --component=theme_adaptable --name=loadingcolor --set='#69B4FC'
+	php cfg.php --component=theme_adaptable --name=msgbadgecolor --set='#FF7014'
+	php cfg.php --component=theme_adaptable --name=messagingbackgroundcolor --set='#FFEEDB'
+	php cfg.php --component=theme_adaptable --name=headerbkcolor --set='#1000A5'
+	php cfg.php --component=theme_adaptable --name=headerbkcolor2 --set='#69B4FC'
+	php cfg.php --component=theme_adaptable --name=rendereroverlaycolor --set='#A0D7FD'
+	php cfg.php --component=theme_adaptable --name=enableavailablecourses --set='hide'
+	php cfg.php --component=theme_adaptable --name=tickertext1 --set='Download free spelling worksheets'
+	php cfg.php --component=theme_adaptable --name=tabbedlayoutcoursepage --set='0-2-1'
+	php cfg.php --component=theme_adaptable --name=tabbedlayoutdashboard --set='0-2-1'
+	php cfg.php --component=theme_adaptable --name=buttoncolor --set='#020D82'
+	php cfg.php --component=theme_adaptable --name=buttonhovercolor --set='#55BBFB'
+	php cfg.php --component=theme_adaptable --name=buttoncolorscnd --set='#020D82'
+	php cfg.php --component=theme_adaptable --name=buttonhovercolorscnd --set='#55BBFB'
+	php cfg.php --component=theme_adaptable --name=categoryhavecustomheader --set=2
+	php cfg.php --component=theme_adaptable --name=enableticker --set=''
+	php cfg.php --component=theme_adaptable --name=enabletickermy --set=''
+	php cfg.php --component=theme_adaptable --name=tickertext1 --set='<p><a href="/mod/folder/view.php?id=8">Download free spelling worksheets</a></p>'
+	php cfg.php --component=theme_adaptable --name=moodledocs --set=0
+	php cfg.php --component=theme_adaptable --name=gdprbutton --set=''
+	php cfg.php --component=theme_adaptable --name=marketlayoutrow1 --set='12-0-0-0'
+	php cfg.php --component=theme_adaptable --name=market1 --set='<h1 style="text-align: center;"><a href="mod/folder/view.php?UKSpellingWorksheets.pdf"><strong>Download our free worksheets</strong></a></h1>'
+	#php cfg.php --component=theme_adaptable --name=frontpagemarketenabled --set=1
+	php cfg.php --component=theme_adaptable --name=frontpagemarketenabled --set='1'
+	php cfg.php --component=theme_adaptable --name=fontname --set='Urbanist'
+	php cfg.php --component=theme_adaptable --name=customcss --set='@font-face { font-family: Urbanist; src: url(fonts/urbanist.ttf);}'
+	php cfg.php --component=theme_adaptable --name=fontheadername --set='Urbanist'
+	php cfg.php --component=theme_adaptable --name=fonttitlename --set='Urbanist'
+	
+	php mysql_compressed_rows.php --fix
+	
 	runuser -u nginx -- /usr/bin/php build_theme_css.php --themes=adaptable
 
 	# Site defaults may be changed via local/defaults.php
@@ -224,6 +319,10 @@ SQL
 	
 	# Reset owner
 	chown -R root /var/www/html/moodle
+	
+	# Setup cron
+	# Delete any existing entry
+	(crontab -u nginx -l 2>/dev/null || echo "" | sed '\/var/www/html/moodle/admin/cli/cron.php\d'; echo '* * * * * /usr/bin/php /var/www/html/moodle/admin/cli/cron.php 2>&1 | /usr/bin/logger -tMoodleCron') | crontab -u nginx -
 }
 
 
@@ -238,5 +337,9 @@ set -eux
 
 update_packages
 install_required_prereqs
+
+download_moodle
+#update_moodle
+
 install_moodle
 
